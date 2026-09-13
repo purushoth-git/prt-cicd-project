@@ -1,0 +1,14 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+
+# Keep Terraform lock file
+# .terraform.lock.hcl
+
+# Sensitive Terraform variables
+*.tfvars
+*.tfvars.json
+
+# Logs
+*.log
