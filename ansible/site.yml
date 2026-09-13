@@ -1,0 +1,135 @@
+---
+- name: Configure CI Master
+  hosts: master
+  become: true
+
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Java and required packages
+      apt:
+        name:
+          - openjdk-21-jre
+          - fontconfig
+          - wget
+          - git
+          - curl
+        state: present
+
+    - name: Add Jenkins GPG key
+      shell: |
+        mkdir -p /etc/apt/keyrings
+        wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+        https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+      args:
+        creates: /etc/apt/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        filename: jenkins
+        state: present
+
+    - name: Update apt after Jenkins repository
+      apt:
+        update_cache: yes
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+
+    - name: Enable Jenkins
+      systemd:
+        name: jenkins
+        enabled: yes
+        state: started
+
+    - name: Verify Jenkins
+      command: systemctl is-active jenkins
+      register: jenkins_status
+
+    - name: Show Jenkins status
+      debug:
+        msg: "Jenkins status: {{ jenkins_status.stdout }}"
+
+
+- name: Configure CI Agent
+  hosts: agent
+  become: true
+
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Java
+      apt:
+        name:
+          - openjdk-21-jre
+        state: present
+
+    - name: Install Docker prerequisites
+      apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+
+    - name: Create Docker keyring directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker GPG key
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: >-
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu
+          {{ ansible_distribution_release }}
+          stable
+        state: present
+        filename: docker
+
+    - name: Install Docker
+      apt:
+        update_cache: yes
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Enable Docker
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: Add ubuntu to Docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Verify Docker
+      command: docker --version
+      register: docker_version
+
+    - name: Show Docker version
+      debug:
+        msg: "{{ docker_version.stdout }}"
